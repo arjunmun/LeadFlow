@@ -1,56 +1,73 @@
-﻿//using System;
-//using System.Threading.Tasks;
-//using OpenAI.Chat;
-//using OpenAI.Managers;
-//using OpenAI.ObjectModels;
-//using OpenAI.ObjectModels.RequestModels;
+﻿using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
-//public class AIGenerator
-//{
-//    private readonly OpenAIService _openAiService;
+public class AIGenerator
+{
+    private readonly HttpClient _httpClient;
+    private readonly string geminiModel = "";
+    private readonly string _apiKey;
+    private readonly EmailService _emailService;
 
-//    public AIGenerator()
-//    {
-//        var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-//        if (string.IsNullOrEmpty(apiKey))
-//        {
-//            throw new InvalidOperationException("API key not found in environment variables.");
-//        }
+    public AIGenerator(HttpClient httpClient, IConfiguration configuration, EmailService emailService)
+    {
+        _httpClient = httpClient;
+        _apiKey = configuration["OpenAI:ApiKey"] ?? "";
+        geminiModel =
+            $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_apiKey}";
+        _emailService = emailService;
+    }
 
-//        _openAiService = new OpenAIService(new OpenAiOptions
-//        {
-//            ApiKey = apiKey
-//        });
-//    }
+    public async Task<string> GenerateMessageAsync(string name, string jobTitle, string company)
+    {
+        try
+        {
+            string myName = "John Doe";
+            string myCompany = "ABC Corp";
+            string myJobTitle = "Marketing lead";
 
-//    public async Task<string> GenerateMessageAsync(string name, string jobTitle, string company)
-//    {
-//        try
-//        {
-//            var response = await _openAiService.ChatCompletion.CreateChatCompletionAsync(new ChatCompletionCreateRequest
-//            {
-//                Model = Models.Gpt_4,
-//                Messages = new[]
-//                {
-//                    new ChatMessage("system", "You are an AI that writes professional LinkedIn outreach messages."),
-//                    new ChatMessage("user", $"Write a LinkedIn message for {name}, {jobTitle} at {company}.")
-//                }
-//            });
+            string prompt = string.Empty;
 
-//            if (response.Successful)
-//            {
-//                return response.Choices[0].Message.Content;
-//            }
-//            else
-//            {
-//                Console.WriteLine($"Error: {response.Error?.Message}");
-//                return "Error generating message.";
-//            }
-//        }
-//        catch (Exception ex)
-//        {
-//            Console.WriteLine($"Exception: {ex.Message}");
-//            return "An unexpected error occurred.";
-//        }
-//    }
-//}
+            if (string.IsNullOrEmpty(company))
+            {
+                prompt = $"Write a professional ready-to-send email outreach email to {name}. My name is {myName} and I work in {myCompany} as {myJobTitle}, Keep it concise, friendly, and engaging, and do not use any placeholder";
+            }
+            else
+            {
+                prompt = $"Write a professional ready-to-send email outreach email to {name}, who is a {jobTitle} at {company}. My name is {myName} and I work in {myCompany} as {myJobTitle}, Keep it concise, friendly, and engaging, and do not use any placeholder";
+            }
+
+            var requestData = new
+            {
+                contents = new[]
+                {
+                    new { parts = new[] { new { text = prompt } } }
+                }
+            };
+
+            var json = JsonSerializer.Serialize(requestData);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = _httpClient.PostAsync(geminiModel, content).Result;
+            string result = await response.Content.ReadAsStringAsync();
+
+            // Parse the JSON response to extract the text
+            var jsonResponse = JsonNode.Parse(result);
+            string generatedText = jsonResponse?["candidates"]?[0]?["content"]?["parts"]?[0]?["text"]?.ToString() ?? "No response received";
+
+            return generatedText;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception: {ex.Message}");
+            return "An unexpected error occurred.";
+        }
+    }
+
+    public async Task SendOutreachEmailAsync(string toEmail, string name, string jobTitle, string company)
+    {
+        string emailBody = await GenerateMessageAsync(name, jobTitle, company);
+        string subject = $"Connecting with {name} from {company}";
+        await _emailService.SendEmailAsync(toEmail, subject, emailBody);
+    }
+}
