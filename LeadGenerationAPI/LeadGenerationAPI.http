@@ -1,0 +1,6 @@
+@LeadGenerationAPI_HostAddress = http://localhost:5178
+
+GET {{LeadGenerationAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
