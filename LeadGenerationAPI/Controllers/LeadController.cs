@@ -1,49 +1,54 @@
 ﻿using LeadGenerationAPI;
+using LeadGenerationAPI.Services;
 using Microsoft.AspNetCore.Mvc;
-using System.Collections.Generic;
-using System.Linq;
-using static LeadScorer;
-[Route("api/leads")]
+using System.Threading.Tasks;
+
+[Route("api/[controller]")]
 [ApiController]
 public class LeadController : ControllerBase
 {
-    private readonly LinkedInScraper _scraper;
-    private readonly LeadScorer _scorer;
-    public LeadController()
+    private readonly ILeadService _leadService;
+
+    public LeadController(ILeadService leadService)
     {
-        _scraper = new LinkedInScraper();  // LinkedIn Scraper
-        _scorer = new LeadScorer();        // AI Lead Scorer
+        _leadService = leadService;
     }
+
     [HttpGet]
-    public IActionResult GetLeads([FromQuery] string searchQuery = "CTO Fintech")
+    public async Task<IActionResult> GetLeads()
     {
-        List<Lead> leads = _scraper.GetLeads(searchQuery);
-        if (leads == null || leads.Count == 0)
-        {
-            return NotFound(new { message = "No leads found for the given query." });
-        }
-        // Score leads by assigning estimated IndustryMatch, JobTitleMatch, Connections
-        List<ScoredLead> scoredLeads = leads.Select(lead =>
-        {
-            var leadData = new LeadData
-            {
-                IndustryMatch = lead.Name.ToLower().Contains("fintech") ? 1 : 0,  // Approximate industry match
-                JobTitleMatch = lead.Name.ToLower().Contains("cto") ? 1 : 0,     // Approximate job title match
-                Connections = new System.Random().Next(1, 10)                     // Randomly simulate connection count
-            };
-            float score = _scorer.ScoreLead(leadData);
-            return new ScoredLead
-            {
-                Name = lead.Name,
-                ProfileUrl = lead.ProfileUrl,
-                IndustryMatch = leadData.IndustryMatch,
-                JobTitleMatch = leadData.JobTitleMatch,
-                Connections = leadData.Connections,
-                Score = score
-            };
-        })
-        .OrderByDescending(l => l.Score)  // Sort by highest score
-        .ToList();
-        return Ok(scoredLeads);  // Return leads with scores
+        // TODO: Get actual user ID from authentication
+        var leads = await _leadService.GetLeadsAsync();
+        return Ok(leads);
     }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetLead(int id)
+    {
+        var lead = await _leadService.GetLeadByIdAsync(id);
+        if (lead == null)
+        {
+            return NotFound();
+        }
+        return Ok(lead);
+    }
+
+    [HttpPost("generate")]
+    public async Task<IActionResult> GenerateLeads([FromBody] GenerateLeadsRequest request)
+    {
+        if (string.IsNullOrEmpty(request.SearchQuery))
+        {
+            return BadRequest("Search query is required");
+        }
+
+        // TODO: Get actual user ID from authentication
+        int userId = 1; // Temporary default value
+        var leads = await _leadService.GenerateLeadsAsync(request.SearchQuery);
+        return Ok(leads);
+    }
+}
+
+public class GenerateLeadsRequest
+{
+    public string SearchQuery { get; set; }
 }

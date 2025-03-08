@@ -1,0 +1,56 @@
+<div class="lead-container">
+  <div class="search-section">
+    <h2>Lead Generation</h2>
+    <div class="search-box">
+      <input
+        type="text"
+        [formControl]="searchControl"
+        placeholder="Enter search query (e.g., 'CTO Fintech')"
+        [class.loading]="generating"
+      />
+      <div *ngIf="generating" class="spinner"></div>
+    </div>
+  </div>
+
+  <div class="leads-section">
+    <div *ngIf="loading" class="loading-spinner">
+      <div class="spinner"></div>
+      <p>Loading leads...</p>
+    </div>
+
+    <div *ngIf="error" class="alert alert-danger">
+      {{ error }}
+    </div>
+
+    <div *ngIf="!loading && !error" class="leads-grid">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Job Title</th>
+            <th>Company</th>
+            <th>Email</th>
+            <th>Score</th>
+            <th>Connections</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let lead of leads">
+            <td>
+              <a [href]="lead.profileUrl" target="_blank">{{ lead.name }}</a>
+            </td>
+            <td>{{ lead.jobTitle }}</td>
+            <td>{{ lead.companyName }}</td>
+            <td>{{ lead.emailAddress }}</td>
+            <td>{{ lead.score | number:'1.0-2' }}</td>
+            <td>{{ lead.connections }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div *ngIf="leads.length === 0" class="no-leads">
+        <p>No leads found. Try a different search query.</p>
+      </div>
+    </div>
+  </div>
+</div> 

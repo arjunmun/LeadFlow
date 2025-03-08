@@ -36,10 +36,10 @@ namespace LeadGenerationAPI.Controllers
             }
         }
 
-        [HttpGet("LinkedInScrapper")]
-        public ActionResult LinkedInScrapper(string query)
-        {
-            return Ok(_linkedInScraper.GetLeads(query));
-        }
+        //[HttpGet("LinkedInScrapper")]
+        //public ActionResult LinkedInScrapper(string query)
+        //{
+        //    return Ok(_linkedInScraper.GetLeads(query));
+        //}
     }
 }

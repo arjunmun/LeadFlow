@@ -5,11 +5,21 @@ using System.Collections.Generic;
 using Microsoft.Identity.Client;
 using System.Text.RegularExpressions;
 using System.Linq;
+using Microsoft.EntityFrameworkCore;
+using LeadGenerationAPI.Models;
+using LeadGenerationAPI.Data;
 
 namespace LeadGenerationAPI
 {
     public class LinkedInScraper
     {
+        private readonly LeadGenerationContext _context;
+
+        public LinkedInScraper(LeadGenerationContext context)
+        {
+            _context = context;
+        }
+
         private string ExtractName(string fullText)
         {
             if (string.IsNullOrEmpty(fullText)) return string.Empty;
@@ -102,7 +112,48 @@ namespace LeadGenerationAPI
             }
         }
 
-        public List<Lead> GetLeads(string searchQuery)
+        private void SaveLeadsToDatabase(List<Lead> leads, int userId)
+        {
+            try
+            {
+                foreach (var lead in leads)
+                {
+                    // Check if lead already exists based on ProfileUrl
+                    var existingLead = _context.Leads
+                        .FirstOrDefault(l => l.ProfileUrl == lead.ProfileUrl);
+
+                    if (existingLead == null)
+                    {
+                        // Add new lead
+                        _context.Leads.Add(lead);
+                    }
+                    else
+                    {
+                        // Update existing lead
+                        existingLead.Name = lead.Name;
+                        existingLead.JobTitle = lead.JobTitle;
+                        existingLead.CompanyName = lead.CompanyName;
+                        existingLead.EmailAddress = lead.EmailAddress;
+                        if (existingLead is ScoredLead existingScored && lead is ScoredLead newScored)
+                        {
+                            existingScored.IndustryMatch = newScored.IndustryMatch;
+                            existingScored.JobTitleMatch = newScored.JobTitleMatch;
+                            existingScored.Connections = newScored.Connections;
+                            existingScored.Score = newScored.Score;
+                        }
+                    }
+                }
+
+                _context.SaveChanges();
+                Console.WriteLine($"Successfully saved {leads.Count} leads to database");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error saving leads to database: {ex.Message}");
+            }
+        }
+
+        public List<Lead> GetLeads(string searchQuery, int userId)
         {
             IWebDriver driver = new ChromeDriver();
             try
@@ -152,6 +203,9 @@ namespace LeadGenerationAPI
                     System.Threading.Thread.Sleep(1000);
                 }
 
+                // Step 4: Save leads to database
+                SaveLeadsToDatabase(leads, userId);
+
                 return leads;
             }
             finally
@@ -159,22 +213,5 @@ namespace LeadGenerationAPI
                 driver.Quit();
             }
         }
-    }
-
-    public class Lead
-    {
-        public string Name { get; set; }
-        public string ProfileUrl { get; set; }
-        public string JobTitle { get; set; }
-        public string CompanyName { get; set; }
-        public string EmailAddress { get; set; }
-    }
-    
-    public class ScoredLead : Lead
-    {
-        public int IndustryMatch { get; set; }  // 1 if industry matches, else 0
-        public int JobTitleMatch { get; set; }  // 1 if job title matches, else 0
-        public int Connections { get; set; }    // Estimated number of connections
-        public float Score { get; set; }        // AI-generated lead score
     }
 }
